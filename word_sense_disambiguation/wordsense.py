@@ -38,27 +38,30 @@ def get_word_sense_vectors(candidate):
     except Exception:
         # print(candidate, "not found in glove")
         return None
-    for ss in wn.synsets(candidate):
+    for sense in wn.lemmas(candidate):
         # if candidate == "bank":
         # print("synonym of ", candidate, " is ", ss.lemmas()[0].name())
         # print("key of ", candidate, " is ", ss.lemmas()[0].key())
-        tokens = nltk.word_tokenize(ss.definition())
-        pos_tags = nltk.pos_tag(tokens)
+        gloss = [sense.synset().definition()]
+        gloss.extend(sense.synset().examples())
         word_vectors = []
-        for gloss_pos, tag in pos_tags:
-            if get_valid_pos_tag(tag):
-                try:
-                    gloss_word_vec = glove[gloss_pos]
-                except Exception:
-                    # print(gloss_pos, "not found in glove")
-                    continue
-                cos_sim = dot(gloss_word_vec, candidate_vec) / (norm(gloss_word_vec) * norm(candidate_vec))
-                if cos_sim > cosine_sim_threshold:
-                    word_vectors.append(gloss_word_vec)
+        for sentence in gloss:
+            tokens = nltk.word_tokenize(sentence)
+            pos_tags = nltk.pos_tag(tokens)
+            for gloss_pos, tag in pos_tags:
+                if get_valid_pos_tag(tag):
+                    try:
+                        gloss_word_vec = glove[gloss_pos]
+                    except Exception:
+                        # print(gloss_pos, "not found in glove")
+                        continue
+                    cos_sim = dot(gloss_word_vec, candidate_vec) / (norm(gloss_word_vec) * norm(candidate_vec))
+                    if cos_sim > cosine_sim_threshold:
+                        word_vectors.append(gloss_word_vec)
         if len(word_vectors) == 0:
             continue
         sense_vector = average(word_vectors, 0)
-        vectors[ss] = sense_vector
+        vectors[sense] = sense_vector
     return vectors
 
 
@@ -118,9 +121,9 @@ def find_wn_key(sentence, lookup_word):
         if nearest_sense is None:
             continue
         if w == lookup_word:
-            wn_key = nearest_sense.lemmas()[0].key()
+            wn_key = nearest_sense.key()
             break
-        nearest_word = nearest_sense.lemmas()[0].name()
+        nearest_word = nearest_sense.name()
         try:
             pos_vectors[nearest_word] = glove[nearest_word]
             # print(w, "is replaced with", nearest_word)
