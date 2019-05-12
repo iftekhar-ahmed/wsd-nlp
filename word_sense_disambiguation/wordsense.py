@@ -23,6 +23,7 @@ def load_glove_vectors(glove_file):
 
 
 cosine_sim_threshold = 0.05
+score_margin_threshold = 0.1
 
 
 def get_valid_pos_tag(tag):
@@ -68,21 +69,28 @@ def get_word_sense_vectors(candidate):
 def disambiguate_word_sense(word, context_vector):
     vectors = sense_vectors_collection[word]
     if len(vectors) == 0:
-        return None
+        return [None, 0.0]
     cos_sims = {}
     for sense, sense_vector in vectors.items():
         cos_sim = dot(context_vector, sense_vector) / (norm(context_vector) * norm(sense_vector))
         cos_sims[sense] = cos_sim
     sorted_list = sorted(cos_sims.items(), key=lambda x: x[1])
     if len(sorted_list) == 0:
-        return None
-    nearest_sense = sorted_list.pop()[0]
-    return nearest_sense
+        return [None, 0.0]
+    most_similar_pair = sorted_list.pop()
+    disambiguated_sense = most_similar_pair[0]
+    cos_sim_second_most_similar_sense = 0
+    if len(sorted_list) > 0:
+        cos_sim_second_most_similar_sense = sorted_list.pop()[1]
+    score_margin = most_similar_pair[1] - cos_sim_second_most_similar_sense
+    # we return the disambiguated sense AND the cosine score margin between the two most similar senses.
+    return [disambiguated_sense, score_margin]
 
 
 # glove = load_glove_vectors('/media/iftekhar/New Volume/Personal/Admission Docs/Germany/RWTH/MI/Lab - AI_Language_Technology/training_nball47634/glove.6B.50d.txt')
+glove = load_glove_vectors('/media/iftekhar/New Volume/Personal/Admission Docs/Germany/RWTH/MI/Lab - AI_Language_Technology/deps.words')
 # glove = load_glove_vectors('/media/iftekhar/New Volume/Personal/Admission Docs/Germany/RWTH/MI/Lab - AI_Language_Technology/bow2.words')
-glove = load_glove_vectors('/media/iftekhar/New Volume/Personal/Admission Docs/Germany/RWTH/MI/Lab - AI_Language_Technology/bow5.words')
+# glove = load_glove_vectors('/media/iftekhar/New Volume/Personal/Admission Docs/Germany/RWTH/MI/Lab - AI_Language_Technology/bow5.words')
 
 sense_vectors_collection = {}
 
@@ -117,23 +125,17 @@ def find_wn_key(sentence, lookup_word):
     context_vec = average(list(pos_vectors.values()), 0)
     wn_key = "not found"
     for w, _ in sorted_sense_vectors_collection:
-        nearest_sense = disambiguate_word_sense(w, context_vec)
-        if nearest_sense is None:
+        disambiguation_results = disambiguate_word_sense(w, context_vec)
+        disambiguated_sense = disambiguation_results[0]
+        if disambiguated_sense is None:
             continue
         if w == lookup_word:
-            wn_key = nearest_sense.key()
+            wn_key = disambiguated_sense.key()
             break
-        nearest_word = nearest_sense.name()
-        try:
-            pos_vectors[nearest_word] = glove[nearest_word]
-            # print(w, "is replaced with", nearest_word)
-            # print(nearest_word, "has sense key", nearest_sense.lemmas()[0].key())
-            if nearest_word != w:
-                pos_vectors.pop(w)
+        score_margin = disambiguation_results[1]
+        if score_margin > score_margin_threshold:
+            pos_vectors[w] = sense_vectors_collection[w][disambiguated_sense]
             context_vec = average(list(pos_vectors.values()), 0)
-        except Exception:
-            # print(nearest_word, " not found in glove")
-            continue
     # print(pos_vectors.keys())
     sense_vectors_collection.clear()
     return wn_key
@@ -161,8 +163,14 @@ def load_annotations():
             wn_keylist.append(wn_key)
 
 
-output_file = open("output_bow5_linux.txt", "w")
-results_file = open("wsd_results_bow5_linux.txt", "w")
+# output_file = open("output_bow2_linux.txt", "w")
+# results_file = open("wsd_results_bow2_linux.txt", "w")
+# output_file = open("output_bow5_linux.txt", "w")
+# results_file = open("wsd_results_bow5_linux.txt", "w")
+# output_file = open("output_glove.6B.50d_linux.txt", "w")
+# results_file = open("wsd_results_glove.6B.50d_linux.txt", "w")
+output_file = open("output_deps_linux.txt", "w")
+results_file = open("wsd_results_deps_linux.txt", "w")
 
 load_annotations()
 
